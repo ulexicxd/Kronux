@@ -2,11 +2,11 @@ local HttpService = game:GetService("HttpService")
 
 local function getVersion()
     local success, result = pcall(function()
-        return HttpService:GetAsync("https://raw.githubusercontent.com/ulexic/Kronux/main/version.txt")
+        return HttpService:GetAsync("https://raw.githubusercontent.com/ulexicxd/Kronux/main/version.txt")
     end)
 
     if success then
-        return result
+        return tostring(result)
     else
         warn("Failed to fetch version: " .. tostring(result))
         return "unknown"
