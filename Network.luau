@@ -1,6 +1,10 @@
+--// Dependencies
+
 local HttpService = game:GetService("HttpService")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+--// Variables
 
 local VersionGithubURL = "https://raw.githubusercontent.com/ulexicxd/Kronux/main/version.txt"
 local CurrentVersion = "1.0"
@@ -43,82 +47,116 @@ end
 -- end
 
 --// Module
-local Network = {}
-Network.__index = Network
-Network.Networks = {}
 
-function Network.new(name: string)
-	if RunService:IsClient() then
-		error("Network.new can only be used on the server")
-	end
+local Utils = {}
 
-	local folder = Instance.new("Folder")
-	folder.Name = name
-	folder.Parent = ReplicatedStorage
+--// Signals
 
-	local connector = Instance.new("RemoteFunction")
-	connector.Name = "NetworkConnect"
-	connector.Parent = folder
+Utils.Signals = {}
+Utils.Signals.__index = Utils.Signals
 
-	local self = setmetatable({
-		NetworkId = name,
-		NetworkFolder = folder,
-		NetworkLocked = false,
-		Shared = {},
-		Remotes = {},
-	}, Network)
+function Utils.Signals.new()
+	local self = setmetatable({}, Utils.Signals)
 
-	connector.OnServerInvoke = function(player)
-		return {
-			NetworkId = name
-		}
-	end
+	self._listeners = {}
 
-	Network.Networks[name] = self
 	return self
 end
 
-function Network:CreateBridge(name: string)
-	if RunService:IsClient() then
-		error("CreateBridge can only be used on the server")
-	end
+function Utils.Signals:Connect(callback)
+	table.insert(self._listeners, callback)
 
-	local remote = Instance.new("RemoteFunction")
-	remote.Name = name
-	remote.Parent = self.NetworkFolder
+	return {
+		Disconnect = function()
+			for i, listener in ipairs(self._listeners) do
+				if listener == callback then
+					table.remove(self._listeners, i)
+					break
+				end
+			end
+		end,
+	}
+end
 
-	self.Remotes[name] = remote
-
-	return function(callback)
-		remote.OnServerInvoke = callback
+function Utils.Signals:Fire(...)
+	for _, listener in ipairs(self._listeners) do
+		coroutine.wrap(listener)(...)
 	end
 end
 
-function Network.ConnectToNetwork(name: string)
-	if RunService:IsServer() then
-		error("ConnectToNetwork can only be used on the client")
+function Utils.Signals:Wait()
+	local event = Instance.new("BindableEvent")
+	local connection
+
+	connection = self:Connect(function(...)
+		event:Fire(...)
+		connection:Disconnect()
+	end)
+
+	return event.Event:Wait()
+end
+
+function Utils.Signals:Destroy()
+	self._listeners = {}
+	self = nil
+end
+
+function Utils.Signals:Once(callback)
+	local connection
+
+	connection = self:Connect(function(...)
+		callback(...)
+		connection:Disconnect()
+	end)
+end
+
+--// Other
+
+function Utils:MergeTables(t1, t2)
+	local merged = {}
+
+	for key, value in pairs(t1) do
+		merged[key] = value
 	end
 
-	local folder = ReplicatedStorage:WaitForChild(name)
-	local connector = folder:WaitForChild("NetworkConnect")
+	for key, value in pairs(t2) do
+		merged[key] = value
+	end
 
-	connector:InvokeServer()
+	return merged
+end
 
-	local self = setmetatable({
-		NetworkId = name,
-		NetworkFolder = folder,
-		Shared = {},
-	}, Network)
+function Utils:DeepCopyTable(tbl)
+	local copy = {}
 
-	for _, obj in ipairs(folder:GetChildren()) do
-		if obj:IsA("RemoteFunction") and obj.Name ~= "NetworkConnect" then
-			self.Shared[obj.Name] = function(_, ...)
-				return obj:InvokeServer(...)
-			end
+	for key, value in pairs(tbl) do
+		if type(value) == "table" then
+			copy[key] = self:DeepCopyTable(value)
+		else
+			copy[key] = value
 		end
 	end
 
-	return self
+	return copy
 end
 
-return Network
+function Utils:Lerp(a, b, t)
+	return math.lerp(a, b, t)
+end
+
+function Utils:MoveForward(part, distance)
+	local forwardVector = part.CFrame.LookVector
+	part.CFrame = part.CFrame + forwardVector * distance
+end
+
+function Utils:MoveRight(part, distance)
+	local rightVector = part.CFrame.RightVector
+	part.CFrame = part.CFrame + rightVector * distance
+end
+
+function Utils:MoveUp(part, distance)
+	local upVector = part.CFrame.UpVector
+	part.CFrame = part.CFrame + upVector * distance
+end
+
+return Utils
